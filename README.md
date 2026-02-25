@@ -1,12 +1,26 @@
 # monty-go
 
-Go bindings for [pydantic/monty](https://github.com/pydantic/monty) that expose the
-`MontyRun` async execution API via a lightweight C/Rust shim.
+Go bindings for [pydantic/monty](https://github.com/pydantic/monty), the experimental
+Python interpreter focused on reproducible async execution. Monty compiles Python code
+once, lets you intercept every external/OS call, snapshot execution state, and resume it
+later. `monty-go` packages Monty as a tiny Rust static library and layers an idiomatic Go
+API on top so Go programs can run embedded Python safely.
 
 The repository contains two deliverables:
 
 - `monty-ffi/`: Rust static library wrapping Monty’s iterators/snapshots.
 - `pkg/monty`: idiomatic Go API that marshals values as JSON.
+
+## Features
+
+- [x] Compile Python source into reusable `Monty` handles.
+- [x] Intercept external function calls/OS operations with resumable snapshots.
+- [x] Serialize `Monty`, `Snapshot`, and `FutureSnapshot` handles to postcard bytes.
+- [x] JSON-backed `Object` values with helpers for positional/keyword args.
+- [x] Prebuilt static libraries for darwin/linux on amd64/arm64.
+- [ ] Resource limiter configuration (Monty’s `LimitedTracker`).
+- [ ] Strongly typed Go wrappers for common MontyObject variants.
+- [ ] CLI tooling for compiling Monty bytecode ahead of time.
 
 ## Prerequisites
 
@@ -33,6 +47,28 @@ make test
 The `make build` target produces `dist/<os>-<arch>/libmonty_ffi.a` (e.g. `dist/darwin-amd64/`
 or `dist/linux-arm64/`) alongside `include/monty_ffi.h`. Both paths are consumed by the Go
 module; having separate directories keeps every OS/architecture artifact side-by-side.
+
+## Using a released build
+
+Every GitHub Release includes tarballs named `monty-go-<version>-<os>-<arch>.tar.gz`.
+To consume an official build without installing Rust:
+
+```bash
+VERSION=v0.1.0
+PLATFORM=darwin-arm64   # choose the archive that matches GOOS-GOARCH
+
+curl -L -O https://github.com/ricochet1k/monty-go/releases/download/${VERSION}/monty-go-${VERSION}-${PLATFORM}.tar.gz
+tar -xzf monty-go-${VERSION}-${PLATFORM}.tar.gz
+mkdir -p dist/${PLATFORM}
+cp libmonty_ffi.a dist/${PLATFORM}/
+mkdir -p include
+cp monty_ffi.h include/
+
+go get github.com/ricochet1k/monty-go/pkg/monty@${VERSION}
+```
+
+Now the `pkg/monty` `#cgo` directives will find the static library under `dist/<os>-<arch>`
+and the header under `include/` when you build your Go program.
 
 ## Usage
 
@@ -80,11 +116,6 @@ func main() {
 
 Snapshots/futures use `runtime.SetFinalizer` to free handles, but it’s still best practice to
 call `Close()` when you’re done.
-
-## Continuous Integration
-
-GitHub Actions workflow (`.github/workflows/ci.yml`) builds the Rust static library and runs
-`go test ./pkg/monty` for every push and pull request.
 
 ## Releasing
 
