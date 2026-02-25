@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform: linux-amd64
+            use_cross: true
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            platform: linux-arm64
+            use_cross: true
+          - os: macos-13
+            target: x86_64-apple-darwin
+            platform: darwin-amd64
+            use_cross: false
+          - os: macos-14
+            target: aarch64-apple-darwin
+            platform: darwin-arm64
+            use_cross: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cbindgen
+        run: cargo install cbindgen --locked
+
+      - name: Generate header
+        run: cd monty-ffi && cbindgen --config cbindgen.toml --output ../include/monty_ffi.h
+
+      - name: Build (cross)
+        if: matrix.use_cross == 'true'
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          command: build --release --target ${{ matrix.target }} --manifest-path monty-ffi/Cargo.toml
+
+      - name: Build (native)
+        if: matrix.use_cross != 'true'
+        run: cargo build --release --target ${{ matrix.target }} --manifest-path monty-ffi/Cargo.toml
+
+      - name: Package artifact
+        run: |
+          PLATFORM="${{ matrix.platform }}"
+          VERSION="${{ github.ref_name }}"
+          mkdir -p package/${PLATFORM}
+          cp include/monty_ffi.h package/${PLATFORM}/monty_ffi.h
+          cp monty-ffi/target/${{ matrix.target }}/release/libmonty_ffi.a package/${PLATFORM}/libmonty_ffi.a
+          tar -czf monty-go-${VERSION}-${PLATFORM}.tar.gz -C package/${PLATFORM} libmonty_ffi.a monty_ffi.h
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: monty-go-${{ matrix.platform }}
+          path: monty-go-${{ github.ref_name }}-${{ matrix.platform }}.tar.gz
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
