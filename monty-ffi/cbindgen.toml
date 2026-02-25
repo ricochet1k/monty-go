@@ -1,0 +1,7 @@
+language = "C"
+include_guard = "MONTY_FFI_H"
+usize_is_size_t = true
+[parse]
+expand = ["monty_ffi"]
+[export]
+item_types = ["functions", "typedefs", "structs", "enums"]
