@@ -61,6 +61,52 @@ func TestSnapshotResume(t *testing.T) {
 	}
 }
 
+func TestExternalCallResumeExample(t *testing.T) {
+	const script = `external_add(x, 10) * 2`
+
+	m := newTestMonty(t, script, []string{"x"}, []string{"external_add"})
+
+	progress, err := m.Start(11)
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	if progress.Kind != FunctionCall {
+		t.Fatalf("expected FunctionCall, got %v", progress.Kind)
+	}
+	if progress.Snapshot == nil {
+		t.Fatalf("expected snapshot for resume")
+	}
+	if progress.FunctionName != "external_add" {
+		t.Fatalf("expected external_add, got %s", progress.FunctionName)
+	}
+	if len(progress.Args) != 2 {
+		t.Fatalf("expected two args, got %d", len(progress.Args))
+	}
+
+	var first, second int
+	if err := progress.Args[0].Unmarshal(&first); err != nil {
+		t.Fatalf("unmarshal arg0: %v", err)
+	}
+	if err := progress.Args[1].Unmarshal(&second); err != nil {
+		t.Fatalf("unmarshal arg1: %v", err)
+	}
+
+	resumed, err := progress.Snapshot.Resume(progress.CallID, first+second)
+	if err != nil {
+		t.Fatalf("resume failed: %v", err)
+	}
+	if resumed.Kind != Complete {
+		t.Fatalf("expected complete after resume, got %v", resumed.Kind)
+	}
+	var result int
+	if err := resumed.Result.Unmarshal(&result); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	if result != (first+second)*2 {
+		t.Fatalf("unexpected result: %d", result)
+	}
+}
+
 func newTestMonty(t *testing.T, code string, inputs, exts []string) *Monty {
 	t.Helper()
 	m, err := New(code, "test.py", inputs, exts)

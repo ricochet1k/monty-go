@@ -92,13 +92,7 @@ import (
     "github.com/ricochet1k/monty-go/pkg/monty"
 )
 
-const script = `
-from helpers import external_add
-
-def run(x):
-    y = external_add(x, 10)
-    return y * 2
-`
+const script = `external_add(x, 10) * 2`
 
 func main() {
     runner, err := monty.New(script, "sample.py", []string{}, []string{"external_add"})
@@ -107,7 +101,7 @@ func main() {
     }
     defer runner.Close()
 
-    progress, err := runner.Start()
+    progress, err := runner.Start(11)
     if err != nil {
         panic(err)
     }
