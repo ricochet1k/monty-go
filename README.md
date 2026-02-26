@@ -1,5 +1,10 @@
 # monty-go
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/ricochet1k/monty-go/pkg/monty.svg)](https://pkg.go.dev/github.com/ricochet1k/monty-go/pkg/monty)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ricochet1k/monty-go)](https://goreportcard.com/report/github.com/ricochet1k/monty-go)
+[![CI](https://github.com/ricochet1k/monty-go/actions/workflows/ci.yml/badge.svg)](https://github.com/ricochet1k/monty-go/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/ricochet1k/monty-go.svg?logo=github)](https://github.com/ricochet1k/monty-go/releases)
+
 Go bindings for [pydantic/monty](https://github.com/pydantic/monty), the experimental
 Python interpreter focused on reproducible async execution. Monty compiles Python code
 once, lets you intercept every external/OS call, snapshot execution state, and resume it
