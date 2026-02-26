@@ -92,26 +92,45 @@ import (
     "github.com/ricochet1k/monty-go/pkg/monty"
 )
 
+const script = `
+from helpers import external_add
+
+def run(x):
+    y = external_add(x, 10)
+    return y * 2
+`
+
 func main() {
-    runner, err := monty.New("x + 1", "adder.py", []string{"x"}, nil)
+    runner, err := monty.New(script, "sample.py", []string{}, []string{"external_add"})
     if err != nil {
         panic(err)
     }
     defer runner.Close()
 
-    progress, err := runner.Start(41)
+    progress, err := runner.Start()
     if err != nil {
         panic(err)
     }
-    if progress.Kind != monty.Complete {
-        panic("unexpected pause")
-    }
 
-    var value int
-    if err := progress.Result.Unmarshal(&value); err != nil {
+    if progress.Kind != monty.FunctionCall {
+        panic("expected an external function call")
+    }
+    fmt.Println("Monty requested:", progress.FunctionName, "args:", len(progress.Args))
+
+    // Emulate the host performing the external work and resume the VM
+    resumed, err := progress.Snapshot.Resume(progress.CallID, 32)
+    if err != nil {
         panic(err)
     }
-    fmt.Println("result:", value) // prints 42
+
+    if resumed.Kind != monty.Complete {
+        panic("expected completion")
+    }
+    var result int
+    if err := resumed.Result.Unmarshal(&result); err != nil {
+        panic(err)
+    }
+    fmt.Println("result:", result)
 }
 ```
 
