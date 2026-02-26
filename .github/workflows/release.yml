@@ -20,7 +20,7 @@ jobs:
             target: aarch64-unknown-linux-gnu
             platform: linux-arm64
             use_cross: true
-          - os: macos-13
+          - os: macos-12
             target: x86_64-apple-darwin
             platform: darwin-amd64
             use_cross: false
@@ -58,10 +58,11 @@ jobs:
         run: |
           PLATFORM="${{ matrix.platform }}"
           VERSION="${{ github.ref_name }}"
-          mkdir -p package/${PLATFORM}
-          cp include/monty_ffi.h package/${PLATFORM}/monty_ffi.h
-          cp monty-ffi/target/${{ matrix.target }}/release/libmonty_ffi.a package/${PLATFORM}/libmonty_ffi.a
-          tar -czf monty-go-${VERSION}-${PLATFORM}.tar.gz -C package/${PLATFORM} libmonty_ffi.a monty_ffi.h
+          mkdir -p package/dist/${PLATFORM}
+          mkdir -p package/include
+          cp include/monty_ffi.h package/include/
+          cp monty-ffi/target/${{ matrix.target }}/release/libmonty_ffi.a package/dist/${PLATFORM}/
+          tar -czf monty-go-${VERSION}-${PLATFORM}.tar.gz -C package dist include
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

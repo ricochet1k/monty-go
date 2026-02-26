@@ -20,7 +20,7 @@ The repository contains two deliverables:
 - [x] Prebuilt static libraries for darwin/linux on amd64/arm64.
 - [ ] Resource limiter configuration (Monty’s `LimitedTracker`).
 - [ ] Strongly typed Go wrappers for common MontyObject variants.
-- [ ] CLI tooling for compiling Monty bytecode ahead of time.
+- [ ] Run more code in the same environment after it finishes (blocked on https://github.com/pydantic/monty/issues/190)
 
 ## Prerequisites
 
@@ -30,7 +30,7 @@ You need:
 - Rust toolchain + `cargo`
 - [`cbindgen`](https://github.com/eqrion/cbindgen) to regenerate the header
 
-## Installation
+## Installation (build from source)
 
 ```bash
 # clone the repository
@@ -50,25 +50,31 @@ module; having separate directories keeps every OS/architecture artifact side-by
 
 ## Using a released build
 
-Every GitHub Release includes tarballs named `monty-go-<version>-<os>-<arch>.tar.gz`.
-To consume an official build without installing Rust:
+Each GitHub Release ships `monty-go-<version>-<os>-<arch>.tar.gz`. Those archives contain
+the `dist/<os>-<arch>/libmonty_ffi.a` and `include/monty_ffi.h` tree that `pkg/monty`
+expects beside its Go sources. A practical workflow is:
 
 ```bash
 VERSION=v0.1.0
-PLATFORM=darwin-arm64   # choose the archive that matches GOOS-GOARCH
+PLATFORM=darwin-arm64   # pick the archive matching GOOS-GOARCH
 
+# Vendor the Go sources so you control the dist/include directories
+mkdir -p third_party
+git clone https://github.com/ricochet1k/monty-go third_party/monty-go
+git -C third_party/monty-go checkout ${VERSION}
+
+# Overlay the release artifacts (populates dist/<platform>/ and include/)
 curl -L -O https://github.com/ricochet1k/monty-go/releases/download/${VERSION}/monty-go-${VERSION}-${PLATFORM}.tar.gz
-tar -xzf monty-go-${VERSION}-${PLATFORM}.tar.gz
-mkdir -p dist/${PLATFORM}
-cp libmonty_ffi.a dist/${PLATFORM}/
-mkdir -p include
-cp monty_ffi.h include/
+tar -xzf monty-go-${VERSION}-${PLATFORM}.tar.gz -C third_party/monty-go
 
+# Make your module prefer the vendored copy with matching artifacts
+go mod edit -replace github.com/ricochet1k/monty-go=./third_party/monty-go
 go get github.com/ricochet1k/monty-go/pkg/monty@${VERSION}
 ```
 
-Now the `pkg/monty` `#cgo` directives will find the static library under `dist/<os>-<arch>`
-and the header under `include/` when you build your Go program.
+You can add `third_party/monty-go` as a git submodule or vendor directory in your project.
+Building your application (`go build`, `go run`, etc.) will now link against the vendored
+static library automatically via the `#cgo` directives.
 
 ## Usage
 
