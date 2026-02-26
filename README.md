@@ -130,16 +130,89 @@ func main() {
 
 ## API Overview
 
-| Type | Purpose |
-| --- | --- |
-| `monty.Monty` | Compiled Monty run. `New`, `NewFromBytes`, `Run`, `Start`, `Dump`, `Close`. |
-| `monty.Progress` | Result of `Start` or a Resume call. Includes `Kind`, decoded args, and snapshot handles. |
-| `monty.Snapshot` | Paused call/OS snapshot. Supports `Resume`, `ResumeError`, `Dump`, `Close`. |
-| `monty.FutureSnapshot` | Paused async/future state. `Resume`, `PendingCallIDs`, `Dump`, `Close`. |
-| `monty.Object` | JSON-backed representation of a Monty value. Use `Unmarshal()` to decode. |
+### Monty handles and inputs
 
-Snapshots/futures use `runtime.SetFinalizer` to free handles, but it’s still best practice to
-call `Close()` when you’re done.
+```go
+m, _ := monty.New(code, "script.py", []string{"x", "y"}, []string{"external_add"})
+progress, _ := m.Start(11, 5) // x=11, y=5
+```
+
+`Monty` instances are compiled bytecode. Pass `inputNames` when calling `New`, then provide
+matching values to `Start`/`Run`. When execution pauses, a `Progress` describes the state.
+
+### Progress kinds
+
+```go
+switch progress.Kind {
+case monty.Complete:
+    var out int
+    _ = progress.Result.Unmarshal(&out)
+case monty.FunctionCall:
+    fmt.Println("external", progress.FunctionName, "args", len(progress.Args))
+    next, _ := progress.Snapshot.Resume(progress.CallID, hostResult)
+case monty.OsCall:
+    // call into your own sandboxed OS layer, then Resume/ResumeError
+case monty.ResolveFutures:
+    pending := progress.FutureSnapshot.PendingCallIDs()
+    next, _ := progress.FutureSnapshot.Resume([]monty.FutureResult{{CallID: pending[0], Result: 42}})
+}
+```
+
+`Progress.Result`, `.Args`, `.Kwargs`, etc., use the `Object` wrapper—decode them with
+`Object.Unmarshal(&target)`.
+
+### Snapshots vs. runners
+
+`Snapshot.Resume` lives on the snapshot because it holds the suspended VM state. You only
+call `Monty.Start` once per run; every subsequent resume goes through the snapshot handle.
+
+```go
+next, err := progress.Snapshot.Resume(progress.CallID, 123)
+nextErr, err := progress.Snapshot.ResumeError(progress.CallID, "boom")
+raw := progress.Snapshot.Dump()           // []byte, postcard encoded
+snapAgain, _ := monty.SnapshotFromBytes(raw)
+```
+
+### Futures
+
+If you return `monty.FutureSnapshot`, resume it with a list describing which async call IDs
+are ready:
+
+```go
+pending := progress.PendingIDs
+updates := []monty.FutureResult{{CallID: pending[0], Result: map[string]any{"ok": true}}}
+next, err := progress.FutureSnapshot.Resume(updates)
+```
+
+Each `FutureResult` can set `Result`, `Err`, or leave both empty to keep waiting.
+
+### Objects in/out
+
+Inputs you pass to `New`/`Start` just need to be JSON-serializable. To send a custom object
+back into Monty, you can pre-marshal it:
+
+```go
+payload := map[string]any{"counts": []int{1, 2, 3}}
+next, _ := progress.Snapshot.Resume(progress.CallID, payload)
+```
+
+For outputs, call `Object.Unmarshal(&target)` (or use `encoding/json` manually) to decode.
+
+### Dump/load
+
+`Monty`, `Snapshot`, and `FutureSnapshot` can be serialized to postcard bytes for caching
+between processes:
+
+```go
+blob, _ := m.Dump()
+mAgain, _ := monty.NewFromBytes(blob)
+
+snapBytes, _ := progress.Snapshot.Dump()
+snapRestored, _ := monty.SnapshotFromBytes(snapBytes)
+```
+
+Snapshots/futures use `runtime.SetFinalizer`, but it’s still best practice to call `Close()`
+when you’re done with a handle.
 
 ## Releasing
 
